@@ -1,0 +1,9 @@
+/* App-specific styles if needed, otherwise empty to use index.css globals */
+.app-container {
+  min-height: 100vh;
+  background-color: var(--color-bg);
+}
+
+.main-content {
+  padding: 2rem 0;
+}
