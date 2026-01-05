@@ -13,11 +13,26 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import PatientList from './components/patient/PatientList';
 import { savePrescription } from './utils/storage';
 
+import { validatePrescription, analyzeBloodReport, analyzeMRI } from './utils/gemini';
+import { AlertTriangle, FileText, Check } from 'lucide-react';
+
 function DoctorInterface() {
-  const [patientData, setPatientData] = useState({ name: '', age: '', gender: '', date: new Date().toISOString().split('T')[0] });
+  const [patientData, setPatientData] = useState({
+    name: '',
+    age: '',
+    gender: '',
+    date: new Date().toISOString().split('T')[0],
+    symptoms: ''
+  });
   const [diagnosis, setDiagnosis] = useState('');
   const [medicines, setMedicines] = useState([]);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [validationResult, setValidationResult] = useState(null);
+  const [isValidating, setIsValidating] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [bloodReportResult, setBloodReportResult] = useState(null);
+  const [isAnalyzingMRI, setIsAnalyzingMRI] = useState(false);
+  const [mriResult, setMriResult] = useState(null);
 
   const handlePrint = () => {
     window.print();
@@ -39,11 +54,60 @@ function DoctorInterface() {
 
   const handleReset = () => {
     if (confirm('Are you sure you want to clear the form?')) {
-      setPatientData({ name: '', age: '', gender: '', date: new Date().toISOString().split('T')[0] });
+      setPatientData({
+        name: '',
+        age: '',
+        gender: '',
+        date: new Date().toISOString().split('T')[0],
+        symptoms: ''
+      });
       setDiagnosis('');
       setMedicines([]);
+      setValidationResult(null);
+      setBloodReportResult(null);
+      setMriResult(null);
     }
   };
+
+  const handleValidate = async () => {
+    if (!patientData.age || medicines.length === 0) {
+      alert("Please enter patient age and add medicines to validate.");
+      return;
+    }
+    setIsValidating(true);
+    setValidationResult(null);
+    const result = await validatePrescription(
+      patientData.age,
+      medicines,
+      patientData.symptoms,
+      diagnosis
+    );
+    setValidationResult(result);
+    setIsValidating(false);
+  };
+
+  const handleBloodReportUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsAnalyzing(true);
+    setBloodReportResult(null);
+    const result = await analyzeBloodReport(file);
+    setBloodReportResult(result);
+    setIsAnalyzing(false);
+  };
+
+  const handleMRIUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsAnalyzingMRI(true);
+    setMriResult(null);
+    const result = await analyzeMRI(file);
+    setMriResult(result);
+    setIsAnalyzingMRI(false);
+  };
+
 
   return (
     <div className="container main-content" style={{ marginTop: '2rem', paddingBottom: '4rem' }}>
@@ -51,6 +115,14 @@ function DoctorInterface() {
       <div className="flex justify-between items-center mb-6 no-print">
         <h2 className="text-2xl font-bold text-slate-800">New Prescription</h2>
         <div className="flex gap-2">
+          <button
+            onClick={handleValidate}
+            disabled={isValidating}
+            className="btn btn-secondary flex items-center gap-2"
+            style={{ borderColor: '#6366f1', color: '#6366f1' }}
+          >
+            {isValidating ? 'Validating...' : 'Validate Prescription'}
+          </button>
           <button onClick={handleReset} className="btn btn-secondary text-sm">Clear Form</button>
           <button onClick={handleSaveAndPrint} className="btn btn-primary">
             Save & Print
@@ -65,9 +137,92 @@ function DoctorInterface() {
         </div>
       )}
 
+      {/* Validation Result Alert */}
+      {validationResult && (
+        <div className={`border px-4 py-3 rounded relative mb-4 no-print ${validationResult.error ? 'bg-red-100 border-red-400 text-red-700' : 'bg-blue-50 border-blue-200 text-blue-800'}`}>
+          <strong className="font-bold block mb-1">
+            {validationResult.error ? <AlertTriangle size={18} className="inline mr-2" /> : "Gemini Validation:"}
+          </strong>
+          <div className="text-sm whitespace-pre-wrap">
+            {validationResult.error || validationResult.text}
+          </div>
+        </div>
+      )}
+
       <div className="grid md:grid-cols-2 gap-6 items-start">
-        <div className="no-print">
+        <div className="no-print space-y-6">
           <PatientDetailsForm data={patientData} onChange={setPatientData} />
+
+          {/* Blood Report Analysis Section */}
+          <div className="card">
+            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <FileText size={20} className="text-slate-500" />
+              Blood Report Challenge
+            </h3>
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-slate-700">Upload Report Image</label>
+              <div className="flex items-center gap-4">
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={handleBloodReportUpload}
+                  className="block w-full text-sm text-slate-500
+                            file:mr-4 file:py-2 file:px-4
+                            file:rounded-full file:border-0
+                            file:text-sm file:font-semibold
+                            file:bg-cyan-50 file:text-cyan-700
+                            hover:file:bg-cyan-100"
+                />
+                {isAnalyzing && <div className="text-sm text-slate-500 animate-pulse">Analyzing...</div>}
+              </div>
+            </div>
+
+            {bloodReportResult && (
+              <div className="mt-4 p-3 bg-slate-50 rounded border border-slate-200">
+                <h4 className="text-sm font-bold text-slate-700 mb-1">Gemini Analysis Verdict:</h4>
+                <div className="text-sm text-slate-600 whitespace-pre-wrap">
+                  {bloodReportResult.error || bloodReportResult.text}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* MRI Scan Analysis Section */}
+          <div className="card">
+            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <div className="p-1 bg-indigo-100 rounded">
+                <FileText size={20} className="text-indigo-600" />
+              </div>
+              MRI Scan Anomaly Detection
+            </h3>
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-slate-700">Upload MRI Scan</label>
+              <div className="flex items-center gap-4">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleMRIUpload}
+                  className="block w-full text-sm text-slate-500
+                            file:mr-4 file:py-2 file:px-4
+                            file:rounded-full file:border-0
+                            file:text-sm file:font-semibold
+                            file:bg-indigo-50 file:text-indigo-700
+                            hover:file:bg-indigo-100"
+                />
+                {isAnalyzingMRI && <div className="text-sm text-slate-500 animate-pulse">Scanning...</div>}
+              </div>
+            </div>
+
+            {mriResult && (
+              <div className="mt-4 p-3 bg-indigo-50 rounded border border-indigo-200">
+                <h4 className="text-sm font-bold text-indigo-800 mb-1">MRI Analysis Findings:</h4>
+                <div className="text-sm text-indigo-900 whitespace-pre-wrap">
+                  {mriResult.error || mriResult.text}
+                </div>
+              </div>
+            )}
+          </div>
+
           <PrescriptionForm
             diagnosis={diagnosis}
             setDiagnosis={setDiagnosis}

@@ -66,6 +66,19 @@ export default function PatientDetailsForm({ data, onChange }) {
                         onChange={handleChange}
                     />
                 </div>
+
+                <div style={{ gridColumn: '1 / -1' }}>
+                    <label className="label" htmlFor="symptoms">Patient Symptoms</label>
+                    <textarea
+                        id="symptoms"
+                        name="symptoms"
+                        className="input-field"
+                        rows="3"
+                        placeholder="Describe patient's symptoms..."
+                        value={data.symptoms || ''}
+                        onChange={handleChange}
+                    />
+                </div>
             </div>
         </div>
     );
